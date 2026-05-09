@@ -1,7 +1,6 @@
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
 
 app = FastAPI()
 
@@ -12,46 +11,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = "01d4ebfd5018479d9da7273412b399ba"
-
-def get_ai_logic(home_name, away_name):
-    # Poisson-based logic mock
-    score_map = {
-        "Real Madrid": 2.5, "Man City": 2.8, "Arsenal": 2.1, 
-        "Barcelona": 1.9, "Liverpool": 2.3, "Bayern": 2.4
-    }
-    h_power = score_map.get(home_name, 1.5)
-    a_power = score_map.get(away_name, 1.2)
-    
-    if h_power > a_power + 0.5:
-        pred, exact = "1", f"{int(h_power)}-{int(a_power)}"
-    elif a_power > h_power + 0.5:
-        pred, exact = "2", f"{int(h_power)}-{int(a_power)}"
-    else:
-        pred, exact = "X", "1-1"
-        
-    return {"prediction": pred, "exact_score": exact, "confidence": "75%"}
+# RapidAPI Key (SportAPI)
+RAPID_API_KEY = "5ca8651d88msh2bf5ae3df931be8p162c6ajsn11a0a0fc38d9"
+HOST = "sportapi7.p.rapidapi.com"
 
 @app.get("/matches/{date_str}")
 def get_matches(date_str: str):
-    url = f"https://api.football-data.org/v4/matches?dateFrom={date_str}&dateTo={date_str}"
-    headers = {"X-Auth-Token": API_KEY}
-    
+    url = f"https://{HOST}/api/v1/sport/football/scheduled-events/{date_str}"
+    headers = {
+        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Host": HOST
+    }
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         if response.status_code == 200:
-            matches = response.json().get('matches', [])
+            events = response.json().get('events', [])
             data = []
-            for m in matches:
-                home = m['homeTeam']['name']
-                away = m['awayTeam']['name']
+            for e in events:
                 data.append({
-                    "id": m['id'],
-                    "home": home,
-                    "away": away,
-                    "league": m['competition']['name'],
-                    "status": m['status'],
-                    "ai": get_ai_logic(home, away)
+                    "id": e.get('id'),
+                    "home": e.get('homeTeam', {}).get('name'),
+                    "away": e.get('awayTeam', {}).get('name'),
+                    "league": e.get('tournament', {}).get('name', 'League'),
+                    "ai": {"prediction": "1", "exact_score": "2-1"}
                 })
             return data
         return []
@@ -60,4 +42,4 @@ def get_matches(date_str: str):
 
 @app.get("/")
 def root():
-    return {"status": "online"}
+    return {"status": "ok"}
