@@ -1,6 +1,7 @@
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
 
 app = FastAPI()
 
@@ -11,38 +12,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-}
+API_KEY = "01d4ebfd5018479d9da7273412b399ba"
+
+def get_ai_logic(home_name, away_name):
+    # Poisson-based logic mock
+    score_map = {
+        "Real Madrid": 2.5, "Man City": 2.8, "Arsenal": 2.1, 
+        "Barcelona": 1.9, "Liverpool": 2.3, "Bayern": 2.4
+    }
+    h_power = score_map.get(home_name, 1.5)
+    a_power = score_map.get(away_name, 1.2)
+    
+    if h_power > a_power + 0.5:
+        pred, exact = "1", f"{int(h_power)}-{int(a_power)}"
+    elif a_power > h_power + 0.5:
+        pred, exact = "2", f"{int(h_power)}-{int(a_power)}"
+    else:
+        pred, exact = "X", "1-1"
+        
+    return {"prediction": pred, "exact_score": exact, "confidence": "75%"}
 
 @app.get("/matches/{date_str}")
 def get_matches(date_str: str):
-    url = f"https://api.sofascore.com/api/v1/sport/football/scheduled-events/{date_str}"
+    url = f"https://api.football-data.org/v4/matches?dateFrom={date_str}&dateTo={date_str}"
+    headers = {"X-Auth-Token": API_KEY}
+    
     try:
-        response = requests.get(url, headers=HEADERS, timeout=5)
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
-            events = response.json().get('events', [])
-            if events:
-                data = []
-                for e in events:
-                    data.append({
-                        "id": e.get('id'),
-                        "home": e.get('homeTeam', {}).get('name'),
-                        "away": e.get('awayTeam', {}).get('name'),
-                        "ai": {"prediction": "1", "exact_score": "2-1"}
-                    })
-                return data
-        
-        return [
-            {"id": 101, "home": "Real Madrid", "away": "Barcelona", "ai": {"prediction": "1", "exact_score": "3-1"}},
-            {"id": 102, "home": "Man City", "away": "Arsenal", "ai": {"prediction": "X", "exact_score": "1-1"}},
-            {"id": 103, "home": "Liverpool", "away": "Chelsea", "ai": {"prediction": "1", "exact_score": "2-0"}}
-        ]
+            matches = response.json().get('matches', [])
+            data = []
+            for m in matches:
+                home = m['homeTeam']['name']
+                away = m['awayTeam']['name']
+                data.append({
+                    "id": m['id'],
+                    "home": home,
+                    "away": away,
+                    "league": m['competition']['name'],
+                    "status": m['status'],
+                    "ai": get_ai_logic(home, away)
+                })
+            return data
+        return []
     except:
-        return [
-            {"id": 101, "home": "Real Madrid", "away": "Barcelona", "ai": {"prediction": "1", "exact_score": "3-1"}},
-            {"id": 102, "home": "Man City", "away": "Arsenal", "ai": {"prediction": "X", "exact_score": "1-1"}}
-        ]
+        return []
 
 @app.get("/")
 def root():
